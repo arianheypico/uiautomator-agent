@@ -238,12 +238,14 @@ class UIAutomationController(context: Context) {
 
     fun takeScreenshot(): String? {
         return try {
-            val bitmap = device.takeScreenshot()
-            if (bitmap != null) {
-                val outputStream = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-                val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
-                Timber.d("Screenshot taken, size: ${outputStream.size()} bytes")
+            val screenshotFile = java.io.File(appContext.cacheDir, "screenshot_${System.currentTimeMillis()}.png")
+            val success = device.takeScreenshot(screenshotFile)
+            
+            if (success && screenshotFile.exists()) {
+                val bytes = screenshotFile.readBytes()
+                val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                screenshotFile.delete() // Cleanup
+                Timber.d("Screenshot taken, size: ${bytes.size} bytes")
                 base64
             } else {
                 Timber.w("Failed to take screenshot")
