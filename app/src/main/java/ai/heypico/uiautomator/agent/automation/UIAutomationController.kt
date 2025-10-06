@@ -141,31 +141,44 @@ class UIAutomationController(context: Context) {
     }
 
     fun pressKeycode(keycode: Int): Boolean {
+        Timber.d("=== ATTEMPTING KEYCODE $keycode ===")
+        
         return try {
             // Try multiple methods
             val commands = arrayOf(
                 "input keyevent $keycode",
                 "su -c 'input keyevent $keycode'",
-                "/system/bin/input keyevent $keycode"
+                "/system/bin/input keyevent $keycode",
+                "sh -c 'input keyevent $keycode'"
             )
             
-            for (cmd in commands) {
+            for ((index, cmd) in commands.withIndex()) {
                 try {
+                    Timber.d("Trying method ${index + 1}: $cmd")
                     val process = Runtime.getRuntime().exec(cmd)
                     val exitCode = process.waitFor()
+                    
+                    // Read error stream
+                    val errorStream = process.errorStream.bufferedReader().readText()
+                    if (errorStream.isNotEmpty()) {
+                        Timber.w("Command stderr: $errorStream")
+                    }
+                    
+                    Timber.d("Command exit code: $exitCode")
+                    
                     if (exitCode == 0) {
-                        Timber.d("Pressed keycode: $keycode via $cmd")
+                        Timber.i("SUCCESS: Pressed keycode $keycode via method ${index + 1}: $cmd")
                         return true
                     }
                 } catch (e: Exception) {
-                    Timber.w("Failed command: $cmd - ${e.message}")
+                    Timber.w("Method ${index + 1} failed: $cmd - ${e.message}")
                 }
             }
             
-            Timber.e("All keycode methods failed for: $keycode")
+            Timber.e("ALL METHODS FAILED for keycode: $keycode")
             false
         } catch (e: Exception) {
-            Timber.e(e, "Error pressing keycode: $keycode")
+            Timber.e(e, "CRITICAL ERROR pressing keycode: $keycode")
             false
         }
     }
