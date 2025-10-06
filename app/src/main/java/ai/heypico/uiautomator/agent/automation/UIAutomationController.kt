@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class UIAutomationController(context: Context) {
 
-    private val appContext: Context = context
+    val appContext: Context = context
     private val elementCache = ConcurrentHashMap<String, String>()
 
     // Get accessibility service instance
