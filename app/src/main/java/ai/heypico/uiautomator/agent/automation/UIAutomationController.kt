@@ -17,15 +17,11 @@ import java.io.ByteArrayOutputStream
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-class UIAutomationController {
+class UIAutomationController(context: Context) {
 
-    private val device: UiDevice by lazy {
-        UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-    }
+    private val device: UiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     
-    private val context: Context by lazy {
-        InstrumentationRegistry.getInstrumentation().targetContext
-    }
+    private val appContext: Context = context
     
     // Cache for found elements
     private val elementCache = ConcurrentHashMap<String, UiObject2>()
@@ -197,13 +193,13 @@ class UIAutomationController {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
             } else {
-                context.packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                appContext.packageManager.getLaunchIntentForPackage(packageName)?.apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
             }
 
             if (intent != null) {
-                context.startActivity(intent)
+                appContext.startActivity(intent)
                 // Wait for app to start
                 device.wait(Until.hasObject(By.pkg(packageName)), 5000)
                 Timber.d("Started activity: $packageName/$activityName")

@@ -1,5 +1,6 @@
 package ai.heypico.uiautomator.agent.server
 
+import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import fi.iki.elonen.NanoHTTPD
@@ -8,10 +9,10 @@ import timber.log.Timber
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-class AppiumWebDriverServer(port: Int) : NanoHTTPD(port) {
+class AppiumWebDriverServer(port: Int, context: Context) : NanoHTTPD(port) {
 
     private val gson = Gson()
-    private val automationController = UIAutomationController()
+    private val automationController = UIAutomationController(context)
     private val sessions = ConcurrentHashMap<String, WebDriverSession>()
 
     data class WebDriverSession(

@@ -103,12 +103,12 @@ class UIAutomatorAgentService : Service() {
     private fun startServers() {
         try {
             // Start Appium WebDriver server on port 6790
-            appiumServer = AppiumWebDriverServer(6790)
+            appiumServer = AppiumWebDriverServer(6790, applicationContext)
             appiumServer?.start()
             Timber.i("Appium WebDriver server started on port 6790")
 
             // Start UIAutomator2 JSON-RPC server on port 7912
-            uiAutomator2Server = UIAutomator2JsonRpcServer(7912)
+            uiAutomator2Server = UIAutomator2JsonRpcServer(7912, applicationContext)
             uiAutomator2Server?.start()
             Timber.i("UIAutomator2 JSON-RPC server started on port 7912")
 
