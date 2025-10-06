@@ -143,7 +143,8 @@ class UIAutomationController(context: Context) {
     fun pressKeycode(keycode: Int): Boolean {
         return try {
             // Use shell command for key press
-            Runtime.getRuntime().exec("input keyevent $keycode")
+            val process = Runtime.getRuntime().exec("input keyevent $keycode")
+            process.waitFor()
             Timber.d("Pressed keycode: $keycode")
             true
         } catch (e: Exception) {
