@@ -144,7 +144,28 @@ class UIAutomationController(context: Context) {
         Timber.d("=== ATTEMPTING KEYCODE $keycode ===")
         
         return try {
-            // Method 1: Try Android API via Instrumentation (requires system app)
+            // Method 1: Try simulating via coordinates (for specific keys)
+            if (keycode == 3) { // Home button
+                try {
+                    // Simulate home gesture (swipe up from bottom)
+                    val service = getAccessibilityService()
+                    if (service != null) {
+                        val success = service.performGesture(
+                            540f, 2000f, // Start from bottom center
+                            540f, 1500f, // Swipe up
+                            300L // Duration
+                        )
+                        if (success) {
+                            Timber.i("SUCCESS: Home gesture via accessibility service")
+                            return true
+                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.w("Home gesture failed: ${e.message}")
+                }
+            }
+            
+            // Method 2: Try Android API via Instrumentation (requires system app)
             try {
                 val instrumentation = android.app.Instrumentation()
                 instrumentation.sendKeyDownUpSync(keycode)
@@ -174,7 +195,31 @@ class UIAutomationController(context: Context) {
                 }
             }
             
-            // Method 3: Try shell commands as fallback
+            // Method 4: Try alternative approaches for specific keys
+            when (keycode) {
+                3 -> { // Home button - use launcher intent
+                    try {
+                        val intent = Intent(Intent.ACTION_MAIN)
+                        intent.addCategory(Intent.CATEGORY_HOME)
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        appContext.startActivity(intent)
+                        Timber.i("SUCCESS: Home via launcher intent")
+                        return true
+                    } catch (e: Exception) {
+                        Timber.w("Launcher intent failed: ${e.message}")
+                    }
+                }
+                4 -> { // Back button - use onBackPressed simulation
+                    try {
+                        // This won't work without activity context, but we try
+                        Timber.w("Back button simulation not available without activity")
+                    } catch (e: Exception) {
+                        Timber.w("Back simulation failed: ${e.message}")
+                    }
+                }
+            }
+            
+            // Method 5: Try shell commands as last resort
             val commands = arrayOf(
                 "input keyevent $keycode",
                 "/system/bin/input keyevent $keycode"
