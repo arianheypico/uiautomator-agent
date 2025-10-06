@@ -24,7 +24,6 @@ android {
             signingConfig signingConfigs.debug // Use debug signing for simplicity
         }
         debug {
-            applicationIdSuffix ".debug"
             debuggable true
         }
     }
