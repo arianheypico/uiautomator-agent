@@ -147,9 +147,10 @@ class UIAutomationController(context: Context) {
             // Try multiple methods
             val commands = arrayOf(
                 "input keyevent $keycode",
+                "/system/bin/input keyevent $keycode", 
                 "su -c 'input keyevent $keycode'",
-                "/system/bin/input keyevent $keycode",
-                "sh -c 'input keyevent $keycode'"
+                "termux-keyevent $keycode",
+                "am broadcast -a android.intent.action.MEDIA_BUTTON --ei android.intent.extra.KEY_EVENT $keycode"
             )
             
             for ((index, cmd) in commands.withIndex()) {
