@@ -2,46 +2,45 @@ package ai.heypico.uiautomator.agent.automation
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.os.SystemClock
 import android.util.Base64
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.By
-import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.UiObject2
-import androidx.test.uiautomator.UiSelector
-import androidx.test.uiautomator.Until
+import ai.heypico.uiautomator.agent.service.UIAutomatorAccessibilityService
 import timber.log.Timber
-import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * UI Automation Controller using Accessibility Service
+ * This approach works in production apps without requiring test instrumentation
+ */
 class UIAutomationController(context: Context) {
 
-    private val device: UiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-    
     private val appContext: Context = context
-    
-    // Cache for found elements
-    private val elementCache = ConcurrentHashMap<String, UiObject2>()
+    private val elementCache = ConcurrentHashMap<String, String>()
+
+    // Get accessibility service instance
+    private fun getAccessibilityService(): UIAutomatorAccessibilityService? {
+        return UIAutomatorAccessibilityService.getInstance()
+    }
 
     // WebDriver-style element finding
     fun findElement(using: String, value: String): String? {
+        val service = getAccessibilityService()
+        if (service == null) {
+            Timber.w("Accessibility service not available")
+            return null
+        }
+
         return try {
-            val element = when (using) {
-                "xpath" -> findByXPath(value)
-                "id" -> device.findObject(By.res(value))
-                "class name" -> device.findObject(By.clazz(value))
-                "name" -> device.findObject(By.text(value))
-                "partial link text" -> device.findObject(By.textContains(value))
-                "link text" -> device.findObject(By.text(value))
-                else -> null
+            val exists = when (using) {
+                "id" -> service.existsByResourceId(value)
+                "name", "link text", "partial link text" -> service.existsByText(value)
+                else -> false
             }
             
-            if (element != null) {
+            if (exists) {
                 val elementId = UUID.randomUUID().toString()
-                elementCache[elementId] = element
+                elementCache[elementId] = "$using:$value"
                 Timber.d("Found element: $using=$value, ID=$elementId")
                 elementId
             } else {
@@ -55,15 +54,14 @@ class UIAutomationController(context: Context) {
     }
 
     fun clickElement(elementId: String): Boolean {
+        val service = getAccessibilityService() ?: return false
+        val elementInfo = elementCache[elementId] ?: return false
+        
         return try {
-            val element = elementCache[elementId]
-            if (element != null) {
-                element.click()
-                Timber.d("Clicked element: $elementId")
-                true
-            } else {
-                Timber.w("Element not found in cache: $elementId")
-                false
+            val (using, value) = elementInfo.split(":", limit = 2)
+            when (using) {
+                "id" -> service.clickByResourceId(value)
+                else -> service.clickByText(value)
             }
         } catch (e: Exception) {
             Timber.e(e, "Error clicking element: $elementId")
@@ -72,16 +70,14 @@ class UIAutomationController(context: Context) {
     }
 
     fun sendKeysToElement(elementId: String, text: String): Boolean {
+        val service = getAccessibilityService() ?: return false
+        val elementInfo = elementCache[elementId] ?: return false
+        
         return try {
-            val element = elementCache[elementId]
-            if (element != null) {
-                element.clear()
-                element.text = text
-                Timber.d("Sent keys to element: $elementId, text: $text")
-                true
-            } else {
-                Timber.w("Element not found in cache: $elementId")
-                false
+            val (using, value) = elementInfo.split(":", limit = 2)
+            when (using) {
+                "id" -> service.setTextByResourceId(value, text)
+                else -> false
             }
         } catch (e: Exception) {
             Timber.e(e, "Error sending keys to element: $elementId")
@@ -89,100 +85,32 @@ class UIAutomationController(context: Context) {
         }
     }
 
-    // UIAutomator2-style direct methods
+    // Direct methods using accessibility service
     fun clickByText(text: String): Boolean {
-        return try {
-            val element = device.findObject(By.text(text))
-            if (element != null) {
-                element.click()
-                Timber.d("Clicked by text: $text")
-                true
-            } else {
-                // Try with UiSelector as fallback
-                val uiObject = device.findObject(UiSelector().text(text))
-                if (uiObject.exists()) {
-                    uiObject.click()
-                    Timber.d("Clicked by text (fallback): $text")
-                    true
-                } else {
-                    Timber.w("Element with text not found: $text")
-                    false
-                }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Error clicking by text: $text")
-            false
-        }
+        val service = getAccessibilityService()
+        return service?.clickByText(text) ?: false
     }
 
     fun clickByResourceId(resourceId: String): Boolean {
-        return try {
-            val element = device.findObject(By.res(resourceId))
-            if (element != null) {
-                element.click()
-                Timber.d("Clicked by resource ID: $resourceId")
-                true
-            } else {
-                Timber.w("Element with resource ID not found: $resourceId")
-                false
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Error clicking by resource ID: $resourceId")
-            false
-        }
+        val service = getAccessibilityService()
+        return service?.clickByResourceId(resourceId) ?: false
     }
 
     fun clickByClassName(className: String): Boolean {
-        return try {
-            val element = device.findObject(By.clazz(className))
-            if (element != null) {
-                element.click()
-                Timber.d("Clicked by class name: $className")
-                true
-            } else {
-                Timber.w("Element with class name not found: $className")
-                false
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Error clicking by class name: $className")
-            false
-        }
+        // Accessibility service doesn't support class name directly
+        Timber.w("clickByClassName not supported via accessibility service")
+        return false
     }
 
     fun setTextByResourceId(resourceId: String, text: String): Boolean {
-        return try {
-            val element = device.findObject(By.res(resourceId))
-            if (element != null) {
-                element.clear()
-                element.text = text
-                Timber.d("Set text by resource ID: $resourceId, text: $text")
-                true
-            } else {
-                Timber.w("Element with resource ID not found: $resourceId")
-                false
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Error setting text by resource ID: $resourceId")
-            false
-        }
+        val service = getAccessibilityService()
+        return service?.setTextByResourceId(resourceId, text) ?: false
     }
 
     fun setTextByClassName(className: String, text: String): Boolean {
-        return try {
-            val element = device.findObject(By.clazz(className))
-            if (element != null) {
-                element.clear()
-                element.text = text
-                Timber.d("Set text by class name: $className, text: $text")
-                true
-            } else {
-                Timber.w("Element with class name not found: $className")
-                false
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Error setting text by class name: $className")
-            false
-        }
+        // Accessibility service doesn't support class name directly
+        Timber.w("setTextByClassName not supported via accessibility service")
+        return false
     }
 
     fun startActivity(packageName: String, activityName: String?): Boolean {
@@ -200,8 +128,6 @@ class UIAutomationController(context: Context) {
 
             if (intent != null) {
                 appContext.startActivity(intent)
-                // Wait for app to start
-                device.wait(Until.hasObject(By.pkg(packageName)), 5000)
                 Timber.d("Started activity: $packageName/$activityName")
                 true
             } else {
@@ -216,7 +142,8 @@ class UIAutomationController(context: Context) {
 
     fun pressKeycode(keycode: Int): Boolean {
         return try {
-            device.pressKeyCode(keycode)
+            // Use shell command for key press
+            Runtime.getRuntime().exec("input keyevent $keycode")
             Timber.d("Pressed keycode: $keycode")
             true
         } catch (e: Exception) {
@@ -226,29 +153,31 @@ class UIAutomationController(context: Context) {
     }
 
     fun swipe(startX: Int, startY: Int, endX: Int, endY: Int, duration: Int): Boolean {
-        return try {
-            device.swipe(startX, startY, endX, endY, duration / 10) // Convert to steps
-            Timber.d("Swiped from ($startX,$startY) to ($endX,$endY) in ${duration}ms")
-            true
-        } catch (e: Exception) {
-            Timber.e(e, "Error swiping")
-            false
-        }
+        val service = getAccessibilityService()
+        return service?.performGesture(
+            startX.toFloat(), 
+            startY.toFloat(), 
+            endX.toFloat(), 
+            endY.toFloat(), 
+            duration.toLong()
+        ) ?: false
     }
 
     fun takeScreenshot(): String? {
         return try {
-            val screenshotFile = java.io.File(appContext.cacheDir, "screenshot_${System.currentTimeMillis()}.png")
-            val success = device.takeScreenshot(screenshotFile)
+            // Use shell command for screenshot
+            val screenshotFile = File(appContext.cacheDir, "screenshot_${System.currentTimeMillis()}.png")
+            val process = Runtime.getRuntime().exec("screencap -p ${screenshotFile.absolutePath}")
+            process.waitFor()
             
-            if (success && screenshotFile.exists()) {
+            if (screenshotFile.exists()) {
                 val bytes = screenshotFile.readBytes()
                 val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-                screenshotFile.delete() // Cleanup
+                screenshotFile.delete()
                 Timber.d("Screenshot taken, size: ${bytes.size} bytes")
                 base64
             } else {
-                Timber.w("Failed to take screenshot")
+                Timber.w("Screenshot file not created")
                 null
             }
         } catch (e: Exception) {
@@ -258,57 +187,37 @@ class UIAutomationController(context: Context) {
     }
 
     fun getTextByText(text: String): String? {
-        return try {
-            val element = device.findObject(By.text(text))
-            element?.text
-        } catch (e: Exception) {
-            Timber.e(e, "Error getting text by text: $text")
-            null
-        }
+        val service = getAccessibilityService()
+        return service?.getTextByResourceId(text) // Fallback
     }
 
     fun getTextByResourceId(resourceId: String): String? {
-        return try {
-            val element = device.findObject(By.res(resourceId))
-            element?.text
-        } catch (e: Exception) {
-            Timber.e(e, "Error getting text by resource ID: $resourceId")
-            null
-        }
+        val service = getAccessibilityService()
+        return service?.getTextByResourceId(resourceId)
     }
 
     fun existsByText(text: String): Boolean {
-        return try {
-            device.findObject(By.text(text)) != null
-        } catch (e: Exception) {
-            Timber.e(e, "Error checking existence by text: $text")
-            false
-        }
+        val service = getAccessibilityService()
+        return service?.existsByText(text) ?: false
     }
 
     fun existsByResourceId(resourceId: String): Boolean {
-        return try {
-            device.findObject(By.res(resourceId)) != null
-        } catch (e: Exception) {
-            Timber.e(e, "Error checking existence by resource ID: $resourceId")
-            false
-        }
+        val service = getAccessibilityService()
+        return service?.existsByResourceId(resourceId) ?: false
     }
 
-    private fun findByXPath(xpath: String): UiObject2? {
-        // Basic XPath support - can be extended
+    private fun findByXPath(xpath: String): String? {
+        // Basic XPath support
+        val service = getAccessibilityService() ?: return null
+        
         return when {
             xpath.contains("@text=") -> {
                 val text = xpath.substringAfter("@text='").substringBefore("'")
-                device.findObject(By.text(text))
+                if (service.existsByText(text)) text else null
             }
             xpath.contains("@resource-id=") -> {
                 val resourceId = xpath.substringAfter("@resource-id='").substringBefore("'")
-                device.findObject(By.res(resourceId))
-            }
-            xpath.contains("@class=") -> {
-                val className = xpath.substringAfter("@class='").substringBefore("'")
-                device.findObject(By.clazz(className))
+                if (service.existsByResourceId(resourceId)) resourceId else null
             }
             else -> null
         }
