@@ -144,22 +144,48 @@ class UIAutomationController(context: Context) {
         Timber.d("=== ATTEMPTING KEYCODE $keycode ===")
         
         return try {
-            // Try multiple methods
+            // Method 1: Try Android API via Instrumentation (requires system app)
+            try {
+                val instrumentation = android.app.Instrumentation()
+                instrumentation.sendKeyDownUpSync(keycode)
+                Timber.i("SUCCESS: Pressed keycode $keycode via Instrumentation")
+                return true
+            } catch (e: Exception) {
+                Timber.w("Instrumentation failed: ${e.message}")
+            }
+            
+            // Method 2: Try broadcast intent for media keys
+            if (keycode in arrayOf(3, 4, 26, 24, 25)) { // Home, Back, Power, Vol+, Vol-
+                try {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_MEDIA_BUTTON)
+                    intent.putExtra(android.content.Intent.EXTRA_KEY_EVENT, 
+                        android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keycode))
+                    appContext.sendBroadcast(intent)
+                    
+                    val intentUp = android.content.Intent(android.content.Intent.ACTION_MEDIA_BUTTON)
+                    intentUp.putExtra(android.content.Intent.EXTRA_KEY_EVENT,
+                        android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keycode))
+                    appContext.sendBroadcast(intentUp)
+                    
+                    Timber.i("SUCCESS: Pressed keycode $keycode via Broadcast Intent")
+                    return true
+                } catch (e: Exception) {
+                    Timber.w("Broadcast intent failed: ${e.message}")
+                }
+            }
+            
+            // Method 3: Try shell commands as fallback
             val commands = arrayOf(
                 "input keyevent $keycode",
-                "/system/bin/input keyevent $keycode", 
-                "su -c 'input keyevent $keycode'",
-                "termux-keyevent $keycode",
-                "am broadcast -a android.intent.action.MEDIA_BUTTON --ei android.intent.extra.KEY_EVENT $keycode"
+                "/system/bin/input keyevent $keycode"
             )
             
             for ((index, cmd) in commands.withIndex()) {
                 try {
-                    Timber.d("Trying method ${index + 1}: $cmd")
+                    Timber.d("Trying shell method ${index + 1}: $cmd")
                     val process = Runtime.getRuntime().exec(cmd)
                     val exitCode = process.waitFor()
                     
-                    // Read error stream
                     val errorStream = process.errorStream.bufferedReader().readText()
                     if (errorStream.isNotEmpty()) {
                         Timber.w("Command stderr: $errorStream")
@@ -168,11 +194,11 @@ class UIAutomationController(context: Context) {
                     Timber.d("Command exit code: $exitCode")
                     
                     if (exitCode == 0) {
-                        Timber.i("SUCCESS: Pressed keycode $keycode via method ${index + 1}: $cmd")
+                        Timber.i("SUCCESS: Pressed keycode $keycode via shell: $cmd")
                         return true
                     }
                 } catch (e: Exception) {
-                    Timber.w("Method ${index + 1} failed: $cmd - ${e.message}")
+                    Timber.w("Shell method ${index + 1} failed: $cmd - ${e.message}")
                 }
             }
             
