@@ -57,13 +57,20 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
     private fun handleListApps(): Response {
         val context = automationController.appContext
         val pm = context.packageManager
-        val apps = pm.getInstalledApplications(android.content.pm.PackageManager.GET_META_DATA)
-            .filter { (it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0 } // Only user apps
-            .map { appInfo ->
+        
+        // Get all apps with launch intent (launchable apps)
+        val mainIntent = Intent(Intent.ACTION_MAIN, null)
+        mainIntent.addCategory(Intent.CATEGORY_LAUNCHER)
+        
+        val apps = pm.queryIntentActivities(mainIntent, 0)
+            .map { resolveInfo ->
+                val appInfo = resolveInfo.activityInfo.applicationInfo
                 mapOf(
                     "packageName" to appInfo.packageName,
                     "appName" to pm.getApplicationLabel(appInfo).toString(),
-                    "enabled" to appInfo.enabled
+                    "activityName" to resolveInfo.activityInfo.name,
+                    "enabled" to appInfo.enabled,
+                    "isSystemApp" to ((appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0)
                 )
             }
             .sortedBy { it["appName"] as String }
