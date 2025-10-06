@@ -60,9 +60,6 @@ dependencies {
     // UI Automator
     implementation 'androidx.test.uiautomator:uiautomator:2.2.0'
     
-    // Accessibility Service
-    implementation 'androidx.accessibility:accessibility:1.0.0'
-    
     // Logging
     implementation 'com.jakewharton.timber:timber:5.0.1'
     
