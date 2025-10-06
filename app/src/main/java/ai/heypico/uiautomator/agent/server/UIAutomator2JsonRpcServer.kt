@@ -21,6 +21,7 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
         return try {
             when {
                 uri == "/info" && method == Method.GET -> handleInfo()
+                uri == "/apps" && method == Method.GET -> handleListApps()
                 uri == "/jsonrpc" && method == Method.POST -> handleJsonRpc(session)
                 else -> createErrorResponse("Unknown endpoint: $uri")
             }
@@ -50,6 +51,32 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
             Response.Status.OK,
             "application/json",
             gson.toJson(info)
+        )
+    }
+
+    private fun handleListApps(): Response {
+        val context = automationController.appContext
+        val pm = context.packageManager
+        val apps = pm.getInstalledApplications(android.content.pm.PackageManager.GET_META_DATA)
+            .filter { (it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0 } // Only user apps
+            .map { appInfo ->
+                mapOf(
+                    "packageName" to appInfo.packageName,
+                    "appName" to pm.getApplicationLabel(appInfo).toString(),
+                    "enabled" to appInfo.enabled
+                )
+            }
+            .sortedBy { it["appName"] as String }
+        
+        val response = mapOf(
+            "apps" to apps,
+            "count" to apps.size
+        )
+        
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            gson.toJson(response)
         )
     }
 
