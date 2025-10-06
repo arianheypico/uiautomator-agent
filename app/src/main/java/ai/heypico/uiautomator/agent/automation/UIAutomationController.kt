@@ -3,6 +3,7 @@ package ai.heypico.uiautomator.agent.automation
 import android.content.Context
 import android.content.Intent
 import android.util.Base64
+import android.app.ActivityManager
 import ai.heypico.uiautomator.agent.service.UIAutomatorAccessibilityService
 import timber.log.Timber
 import java.io.File
@@ -197,16 +198,43 @@ class UIAutomationController(context: Context) {
             
             // Method 4: Try alternative approaches for specific keys
             when (keycode) {
-                3 -> { // Home button - use launcher intent
+                3 -> { // Home button - multiple approaches
+                    // Approach 1: Close current app (bring launcher to front)
+                    try {
+                        val activityManager = appContext.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                        activityManager.moveTaskToFront(1, 0) // Move launcher task to front
+                        Timber.i("SUCCESS: Home via moveTaskToFront")
+                        return true
+                    } catch (e: Exception) {
+                        Timber.w("moveTaskToFront failed: ${e.message}")
+                    }
+                    
+                    // Approach 2: Start launcher explicitly
+                    try {
+                        val intent = appContext.packageManager.getLaunchIntentForPackage("com.android.launcher")
+                            ?: appContext.packageManager.getLaunchIntentForPackage("com.android.launcher3")
+                            ?: appContext.packageManager.getLaunchIntentForPackage("com.oppo.launcher")
+                        
+                        if (intent != null) {
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            appContext.startActivity(intent)
+                            Timber.i("SUCCESS: Home via explicit launcher")
+                            return true
+                        }
+                    } catch (e: Exception) {
+                        Timber.w("Explicit launcher failed: ${e.message}")
+                    }
+                    
+                    // Approach 3: Generic home intent
                     try {
                         val intent = Intent(Intent.ACTION_MAIN)
                         intent.addCategory(Intent.CATEGORY_HOME)
-                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                         appContext.startActivity(intent)
-                        Timber.i("SUCCESS: Home via launcher intent")
+                        Timber.i("SUCCESS: Home via generic intent")
                         return true
                     } catch (e: Exception) {
-                        Timber.w("Launcher intent failed: ${e.message}")
+                        Timber.w("Generic home intent failed: ${e.message}")
                     }
                 }
                 4 -> { // Back button - use onBackPressed simulation
