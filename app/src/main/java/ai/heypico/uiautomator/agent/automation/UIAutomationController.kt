@@ -142,11 +142,28 @@ class UIAutomationController(context: Context) {
 
     fun pressKeycode(keycode: Int): Boolean {
         return try {
-            // Use shell command for key press
-            val process = Runtime.getRuntime().exec("input keyevent $keycode")
-            process.waitFor()
-            Timber.d("Pressed keycode: $keycode")
-            true
+            // Try multiple methods
+            val commands = arrayOf(
+                "input keyevent $keycode",
+                "su -c 'input keyevent $keycode'",
+                "/system/bin/input keyevent $keycode"
+            )
+            
+            for (cmd in commands) {
+                try {
+                    val process = Runtime.getRuntime().exec(cmd)
+                    val exitCode = process.waitFor()
+                    if (exitCode == 0) {
+                        Timber.d("Pressed keycode: $keycode via $cmd")
+                        return true
+                    }
+                } catch (e: Exception) {
+                    Timber.w("Failed command: $cmd - ${e.message}")
+                }
+            }
+            
+            Timber.e("All keycode methods failed for: $keycode")
+            false
         } catch (e: Exception) {
             Timber.e(e, "Error pressing keycode: $keycode")
             false
