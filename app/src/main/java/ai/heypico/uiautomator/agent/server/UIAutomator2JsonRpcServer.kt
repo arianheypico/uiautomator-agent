@@ -99,10 +99,12 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
         val packages = pm.getInstalledPackages(android.content.pm.PackageManager.GET_META_DATA)
             .filter { packageInfo ->
                 // Filter only user-installed apps (non-system)
-                (packageInfo.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0
+                packageInfo.applicationInfo?.let { appInfo ->
+                    (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0
+                } ?: false
             }
-            .map { packageInfo ->
-                val appInfo = packageInfo.applicationInfo
+            .mapNotNull { packageInfo ->
+                val appInfo = packageInfo.applicationInfo ?: return@mapNotNull null
                 val launchIntent = pm.getLaunchIntentForPackage(packageInfo.packageName)
                 mapOf(
                     "packageName" to packageInfo.packageName,
