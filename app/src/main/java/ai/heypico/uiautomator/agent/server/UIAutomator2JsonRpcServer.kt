@@ -23,6 +23,7 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
             when {
                 uri == "/info" && method == Method.GET -> handleInfo()
                 uri == "/apps" && method == Method.GET -> handleListApps()
+                uri == "/packages" && method == Method.GET -> handleListAllPackages()
                 uri == "/jsonrpc" && method == Method.POST -> handleJsonRpc(session)
                 else -> createErrorResponse("Unknown endpoint: $uri")
             }
@@ -81,6 +82,44 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
         val response = mapOf(
             "apps" to apps,
             "count" to apps.size
+        )
+        
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            gson.toJson(response)
+        )
+    }
+
+    private fun handleListAllPackages(): Response {
+        val context = automationController.appContext
+        val pm = context.packageManager
+        
+        // Get ALL installed packages (including hidden/restricted)
+        val packages = pm.getInstalledPackages(android.content.pm.PackageManager.GET_META_DATA)
+            .filter { packageInfo ->
+                // Filter only user-installed apps (non-system)
+                (packageInfo.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0
+            }
+            .map { packageInfo ->
+                val appInfo = packageInfo.applicationInfo
+                val launchIntent = pm.getLaunchIntentForPackage(packageInfo.packageName)
+                mapOf(
+                    "packageName" to packageInfo.packageName,
+                    "appName" to pm.getApplicationLabel(appInfo).toString(),
+                    "versionName" to (packageInfo.versionName ?: "unknown"),
+                    "versionCode" to packageInfo.longVersionCode,
+                    "enabled" to appInfo.enabled,
+                    "hasLaunchIntent" to (launchIntent != null),
+                    "installTime" to packageInfo.firstInstallTime,
+                    "updateTime" to packageInfo.lastUpdateTime
+                )
+            }
+            .sortedBy { it["appName"] as String }
+        
+        val response = mapOf(
+            "packages" to packages,
+            "count" to packages.size
         )
         
         return newFixedLengthResponse(
