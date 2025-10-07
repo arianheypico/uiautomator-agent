@@ -226,4 +226,37 @@ class UIAutomatorAccessibilityService : AccessibilityService() {
         
         return null
     }
+
+    fun dumpUIElements(): List<Map<String, Any>> {
+        val root = rootInActiveWindow ?: return emptyList()
+        val elements = mutableListOf<Map<String, Any>>()
+        collectElements(root, elements, 0)
+        root.recycle()
+        return elements
+    }
+
+    private fun collectElements(node: AccessibilityNodeInfo, elements: MutableList<Map<String, Any>>, depth: Int) {
+        if (depth > 10) return // Limit depth to avoid too much data
+        
+        val element = mutableMapOf<String, Any>(
+            "className" to (node.className?.toString() ?: ""),
+            "text" to (node.text?.toString() ?: ""),
+            "contentDescription" to (node.contentDescription?.toString() ?: ""),
+            "resourceId" to (node.viewIdResourceName ?: ""),
+            "clickable" to node.isClickable,
+            "enabled" to node.isEnabled,
+            "focused" to node.isFocused,
+            "bounds" to node.getBoundsInScreen().toShortString()
+        )
+        
+        if (element["text"] != "" || element["contentDescription"] != "" || element["resourceId"] != "") {
+            elements.add(element)
+        }
+        
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            collectElements(child, elements, depth + 1)
+            child.recycle()
+        }
+    }
 }

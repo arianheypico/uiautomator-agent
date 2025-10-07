@@ -353,4 +353,9 @@ class UIAutomationController(context: Context) {
             else -> null
         }
     }
+
+    fun dumpUIElements(): List<Map<String, Any>> {
+        val service = getAccessibilityService()
+        return service?.dumpUIElements() ?: emptyList()
+    }
 }

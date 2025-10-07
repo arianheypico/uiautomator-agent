@@ -147,6 +147,7 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
             "screenshot" -> handleScreenshot()
             "get_text" -> handleGetText(params)
             "exists" -> handleExists(params)
+            "dump_ui" -> handleDumpUI()
             else -> mapOf("error" to "Unknown method: $method")
         }
 
@@ -289,6 +290,15 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
         }
 
         return mapOf("success" to true, "exists" to exists)
+    }
+
+    private fun handleDumpUI(): Map<String, Any> {
+        return try {
+            val elements = automationController.dumpUIElements()
+            mapOf("success" to true, "elements" to elements)
+        } catch (e: Exception) {
+            mapOf("success" to false, "error" to (e.message ?: "Failed to dump UI"))
+        }
     }
 
     private fun getRequestBody(session: IHTTPSession): String {
