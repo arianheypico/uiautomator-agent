@@ -238,6 +238,9 @@ class UIAutomatorAccessibilityService : AccessibilityService() {
     private fun collectElements(node: AccessibilityNodeInfo, elements: MutableList<Map<String, Any>>, depth: Int) {
         if (depth > 10) return // Limit depth to avoid too much data
         
+        val bounds = android.graphics.Rect()
+        node.getBoundsInScreen(bounds)
+        
         val element = mutableMapOf<String, Any>(
             "className" to (node.className?.toString() ?: ""),
             "text" to (node.text?.toString() ?: ""),
@@ -246,7 +249,7 @@ class UIAutomatorAccessibilityService : AccessibilityService() {
             "clickable" to node.isClickable,
             "enabled" to node.isEnabled,
             "focused" to node.isFocused,
-            "bounds" to node.getBoundsInScreen().toShortString()
+            "bounds" to bounds.toShortString()
         )
         
         if (element["text"] != "" || element["contentDescription"] != "" || element["resourceId"] != "") {
