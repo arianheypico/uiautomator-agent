@@ -95,23 +95,20 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
         val context = automationController.appContext
         val pm = context.packageManager
         
-        // Get ALL installed packages (including hidden/restricted)
+        // Get ALL installed packages (system + user, no filter)
         val packages = pm.getInstalledPackages(android.content.pm.PackageManager.GET_META_DATA)
-            .filter { packageInfo ->
-                // Filter only user-installed apps (non-system)
-                packageInfo.applicationInfo?.let { appInfo ->
-                    (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0
-                } ?: false
-            }
             .mapNotNull { packageInfo ->
                 val appInfo = packageInfo.applicationInfo ?: return@mapNotNull null
                 val launchIntent = pm.getLaunchIntentForPackage(packageInfo.packageName)
+                val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                
                 mapOf(
                     "packageName" to packageInfo.packageName,
                     "appName" to pm.getApplicationLabel(appInfo).toString(),
                     "versionName" to (packageInfo.versionName ?: "unknown"),
                     "versionCode" to packageInfo.longVersionCode,
                     "enabled" to appInfo.enabled,
+                    "isSystemApp" to isSystemApp,
                     "hasLaunchIntent" to (launchIntent != null),
                     "installTime" to packageInfo.firstInstallTime,
                     "updateTime" to packageInfo.lastUpdateTime
@@ -121,7 +118,9 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
         
         val response = mapOf(
             "packages" to packages,
-            "count" to packages.size
+            "count" to packages.size,
+            "userApps" to packages.count { !(it["isSystemApp"] as Boolean) },
+            "systemApps" to packages.count { it["isSystemApp"] as Boolean }
         )
         
         return newFixedLengthResponse(
