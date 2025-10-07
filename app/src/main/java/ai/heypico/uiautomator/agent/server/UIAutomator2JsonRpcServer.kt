@@ -148,6 +148,10 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
             "get_text" -> handleGetText(params)
             "exists" -> handleExists(params)
             "dump_ui" -> handleDumpUI()
+            "adb_shell" -> handleAdbShell(params)
+            "adb_tap" -> handleAdbTap(params)
+            "adb_text" -> handleAdbText(params)
+            "adb_swipe" -> handleAdbSwipe(params)
             else -> mapOf("error" to "Unknown method: $method")
         }
 
@@ -298,6 +302,112 @@ class UIAutomator2JsonRpcServer(port: Int, context: Context) : NanoHTTPD(port) {
             mapOf("success" to true, "elements" to elements)
         } catch (e: Exception) {
             mapOf("success" to false, "error" to (e.message ?: "Failed to dump UI"))
+        }
+    }
+
+    private fun handleAdbShell(params: com.google.gson.JsonArray?): Map<String, Any> {
+        if (params == null || params.size() == 0) {
+            return mapOf("success" to false, "error" to "Missing command parameter")
+        }
+
+        val command = params.get(0).asString
+        return executeShellCommand(command)
+    }
+
+    private fun handleAdbTap(params: com.google.gson.JsonArray?): Map<String, Any> {
+        if (params == null || params.size() < 2) {
+            return mapOf("success" to false, "error" to "Missing x,y parameters")
+        }
+
+        val x = params.get(0).asInt
+        val y = params.get(1).asInt
+        return executeShellCommand("input tap $x $y")
+    }
+
+    private fun handleAdbText(params: com.google.gson.JsonArray?): Map<String, Any> {
+        if (params == null || params.size() == 0) {
+            return mapOf("success" to false, "error" to "Missing text parameter")
+        }
+
+        val text = params.get(0).asString
+        val escapedText = text.replace(" ", "%s")
+        return executeShellCommand("input text $escapedText")
+    }
+
+    private fun handleAdbSwipe(params: com.google.gson.JsonArray?): Map<String, Any> {
+        if (params == null || params.size() < 5) {
+            return mapOf("success" to false, "error" to "Missing swipe parameters")
+        }
+
+        val x1 = params.get(0).asInt
+        val y1 = params.get(1).asInt
+        val x2 = params.get(2).asInt
+        val y2 = params.get(3).asInt
+        val duration = params.get(4).asInt
+        return executeShellCommand("input swipe $x1 $y1 $x2 $y2 $duration")
+    }
+
+    private fun executeShellCommand(command: String): Map<String, Any> {
+        return try {
+            Timber.d("Executing shell command: $command")
+            
+            // Try method 1: Direct shell execution (limited)
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+            
+            val output = process.inputStream.bufferedReader().readText()
+            val error = process.errorStream.bufferedReader().readText()
+            
+            Timber.d("Command exit code: $exitCode, output: $output, error: $error")
+            
+            // If direct shell fails, try via local ADB if available
+            if (exitCode != 0 && isAdbAvailable()) {
+                Timber.d("Retrying via local ADB...")
+                return executeViaLocalAdb(command)
+            }
+            
+            mapOf(
+                "success" to (exitCode == 0),
+                "exitCode" to exitCode,
+                "output" to output,
+                "error" to error,
+                "method" to "shell"
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to execute shell command: $command")
+            mapOf("success" to false, "error" to (e.message ?: "Command execution failed"))
+        }
+    }
+
+    private fun isAdbAvailable(): Boolean {
+        return try {
+            val process = Runtime.getRuntime().exec("which adb")
+            process.waitFor() == 0
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun executeViaLocalAdb(command: String): Map<String, Any> {
+        return try {
+            // Execute via local ADB (if Termux ADB is installed)
+            val adbCommand = "adb -s localhost:5555 shell $command"
+            val process = Runtime.getRuntime().exec(adbCommand)
+            val exitCode = process.waitFor()
+            
+            val output = process.inputStream.bufferedReader().readText()
+            val error = process.errorStream.bufferedReader().readText()
+            
+            mapOf(
+                "success" to (exitCode == 0),
+                "exitCode" to exitCode,
+                "output" to output,
+                "error" to error,
+                "method" to "adb"
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to execute via local ADB")
+            mapOf("success" to false, "error" to (e.message ?: "ADB execution failed"))
         }
     }
 
